@@ -1,14 +1,12 @@
 ---
-# Feel free to add content and custom Front Matter to this file.
-# To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
 
 # layout: home
 # theme: jekyll-theme-cayman
 ---
 
-# Recommendation Systems: Recipes and Ratings
+# Predicting Recipe Ratings With Content and Language Models
 
-🤯, Transfer learning, explain ways of dealing with _imbalanced_ **data**
+🤯
 
 Table of Contents
 
@@ -21,19 +19,19 @@ Table of Contents
 3. [Assessment of Missingness](#assessment-of-missingness)
   - [NMAR Analysis](#nmar-analysis)
   - [Missingness Dependency](#missingness-dependency)
-  - [Imputing Missing Values](#imputing-missing-values)
 4. [Hypothesis Testing](#hypothesis-testing)
   - [Setting Up the Test](#setting-up-the-test)
   - [Permutation Test](#permutation-test)
 5. [Framing a Prediction Problem](#framing-a-prediction-problem)
 6. [Baseline Model](#baseline-model)
 7. [Final Model](#final-model)
+8. [Fairness Analysis](#fairness-analysis)
 
 ## Introduction
 
-Building state of the art recommendation systems can be much more difficult and complex than building simple regression/classification models. In this project the dataset of focus will be ratings and recipes scraped from Food.com(cite). The dataset consists of 270K recipes and 1.4M reviews between 2000 and 2018. I will show the process of building a recommender system that can effectively predict user preferences. This ability is very useful and can be generalized to any type of domain where recommendations are useful, such as social media or video recommendations. 
+Building models that can predict ratings is a problem that falls under the recommendation system domain. Collaborative filtering models work best in recommendations, but that does not mean that conventional content-based ML models can't perform well too. Indeed, many of the largest companies use a combination of both. In this project I will build a model that can predict the ratings of recipes using a combination of a tree-based model and a natural language model. The dataset of focus will be ratings and recipes scraped from Food.com(cite). The dataset consists of 84K recipes and 730K reviews between 2000 and 2018. I will show the process of building a model that can effectively predict user ratings. I will look into what factors contribute to a recipe's ratings. This ability is very useful and can be generalized to any type of domain where recommendations are useful, such as social media, video, product recommendations. 
 
-After inner joining recipes and reviews, here is a list of all relevant features in the dataset that will be used to build the model:
+After inner joining the recipes and reviews datasets, here are the list of all the initial relevant features in the dataset that will be used to build the model:
 
 |Column          |Description                        |
 |----------------|-----------------------------------|
@@ -82,6 +80,9 @@ The following feature columns are added:
 
 |Column                |Description                       |
 |----------------------|----------------------------------|
+|`rating_missing`      |Whether the rating was originally missing|
+|`recipe_avg_rating`   |Recipe's average rating           |
+|`user_avg_rating`     |User's average rating             |
 |`contributor_id_count`|Occurences of contributor_id      |
 |`user_id_count`       |Occurences of user_id             |
 |`recipe_id_count`     |Occurences of recipe_id           |
@@ -131,6 +132,8 @@ Plotting the rating distribution:
   frameborder="0"
 ></iframe>
 
+As we can see the data is imbalanced, as is often the case in the real world. There are many things we can do to address this, including oversampling, undersampling, synthetic data, etc., but all of those would come with their own challenges/drawbacks. We'll leave it like this. 
+
 ### Bivariate Analysis
 
 As we can see, the majority of ratings on Food.com are 5 stars, with some 4 stars, and few 1-3 stars. 0 stars mean that the rating is missing. We will deal with this in the next section.
@@ -156,6 +159,8 @@ Here is a pivot table of the 5 most popular recipes:
 |bacon lattice tomato muffins rsc	|5.00|	192|	85.26|
 |quick cinnamon rolls no yeast|	3.96|	162|	351.85|
 
+We can see that even the top recipe has no more than 300 reviews, suggesting that the site has a lot of categories and niches to satisfy users. 
+
 
 ## Assessment of Missingness
 
@@ -172,11 +177,7 @@ df.sample(5)
 
 Sampling small pieces of data from the entire dataset, at first glance there appears to be both positive and negative sentiment reviews when the rating is missing.
 
-This is likely not NMAR (Not Missing At Random), thereby making it MAR. This is because the missingness of `rating` likely depends on other columns in the data, like `review`. There are many reasons why people would leave a review but not a rating, and you can figure out why some of the ratings are missing by looking at the reviews. Some people left a review only to ask questions. Some haven't done the recipe. Maybe they didn't like the recipe but also didn't want to bring down the score. 
-
-````````
-
-````````
+This likely makes `rating` MAR (missing at random) rather than NMAR. This is because the missingness of `rating` likely depends on other columns in the data, like `review`. There are many reasons why people would leave a review but not a rating, and you can figure out why some of the ratings are missing by looking at the reviews. Some people left a review only to ask questions. Some haven't done the recipe. Maybe they didn't like the recipe but also didn't want to bring down the score. 
 
 ### Missingness Dependency
 
@@ -204,9 +205,7 @@ Distribution of column `review_length` when `rating` is missing
 
 As we can see, this plot demonstrates that `review_length` influences whether `rating` is missing in a statistically significant way. never use language that implies an absolute conclusion; since we are performing statistical tests and not randomized controlled trials, we cannot prove that either hypothesis is 100% true or false.
 
-### Imputing Missing Values
-
-We will impute missing values using K-Nearest Neighbors
+For our purposes, since we are trying to predict `rating`, it would make sense not to impute missing values and train on them. Therefore, we will drop all rows that have missing ratings. After we inspect the dataframe, we no longer have any missing values.
 
 ## Hypothesis Testing
 
@@ -233,17 +232,41 @@ The prediction problem we will tackle is to build a model that can predict what 
 
 ## Baseline Model
 
-The baseline model will be trained using a CatBoostRegressor, a type of GBM (Gradient Boosting Machine) model. This type of model is state of the art on many tabular-related tasks. We will first onehotencode the features of columns such as `tags` and `ingredients`. Since they have so many unique values we will convert the features into a sparse matrix and also sparsify the entire dataframe. Since the model has such high dimensionality and is so large, it is impractical to train on it as it'll be too slow and we wouldn't even have enough memory to train them. Therefore, we will perform linear dimensionality reduction through the means of truncated SVD, which, unlike regular PCA, can work on sparse matrices efficiently. After training, the model achieves an accuracy of 0.72.
+We add the following tfidf features for all the non-numeric columns:
+
+|Column                |
+|----------------------|
+|`name_tfidf`         |
+|`steps_tfidf`        |
+|`description_tfidf`  |
+|`reviews_tfidf`      |
+
+
+Afterwards we One-hot encode the features of columns `tags` and `ingredients`. Since they have so many unique values we will convert the features into a sparse matrix and also sparsify the entire dataframe.
+
+The baseline model will be trained using a CatBoostRegressor, a type of GBM (Gradient Boosting Machine) model. This type of model is state of the art on many tabular-related tasks. Since the model has such high dimensionality and is so large, it is impractical to train on it as it'll be too slow and we would quickly run out of memory. Therefore, we will perform linear dimensionality reduction through truncated SVD, which, unlike regular PCA, can work on sparse matrices efficiently. After training, the model achieves an accuracy of 0.72. This is pretty bad(If we predicted everything to be 5, we would get 77%).
 
 ## Final Model
 
-For the final model, temporal and cyclical features were added to improve the capturing of time series data. After doing gridsearch to find the optimal hyperparameters, a CatBoost Regressor was trained again, this time achieving an accuracy of X%.This was not enough so I finetuned training data on DistilBert to predict ratings from 1-5. It took 30 minutes to train, and I ensembled the predictions with the CatBoostRegressor model, achieving a final accuracy of X%. 
+<iframe
+  src="model.png"
+  width="800"
+  height="340"
+  frameborder="0"
+></iframe>
+
+For the final model it is a combination of two models, a CatBoostRegressor and a fine-tuned DistilBert model. Intuitively the best predictor of ratings are the reviews. To extract data from the reviews, we need to make use of natural language processing. I finetuned the DistilBert model on Sequence Classification, so that it can predict the ratings from 1-5 based off only the written reviews in the training data. This model achieved an accuracy score of 84% on the testing data.
+
+For the CatBoostRegressor model, temporal and cyclical features were added to improve the capturing of time series data. There are many recipes centered around holidays, which can affect ratings. After doing gridsearch to find the optimal hyperparameters, a CatBoost Regressor with learning_rate=0.01 and depth=6 was trained again, this time achieving an accuracy of 88%. What a surprise! I expected the language model to perform better. I ensembled the predictions of the CatBoostRegressor with the DistilBert model, achieving a final accuracy of 90%. 
+
+Even though both models scored under 90%, they were able to capture different enough aspects of the data that when their predictions combined, performance was improved.
 
 ## Fairness Analysis
 
-Knowing if the model performs better or worse from one group to another is helpful for a variety of reasons. Let's try to perform a fairness analysis. Let's see if it performs worse for individuals whose first post was before 2013 vs individuals whose first post was after 2013. 
+Knowing if the model performs better or worse from one group to another is helpful for a variety of reasons. Let's try to perform a fairness analysis. Let's see if it performs worse for individuals with low engagement(<=10 reviews) vs individuals with high engagement.
 
-Null hypothesis: model performs worse for individuals whose first post was after 2013
+Null hypothesis: model has the same RMSE on low engagement users as it does high engagement users
 
-Alternate hypothesis: model does not perform worse for individuals whose first post was after 2013
+Alternate hypothesis: model does not have the same RMSE on low engagement users as it does high engagement users
 
+After performing the permutation test, with the p-value of 0.001, we reject the null hypothesis and say that there is a statistically significant difference in model performance between high engagement and low engagement users
