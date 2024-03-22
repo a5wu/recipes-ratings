@@ -203,7 +203,7 @@ Distribution of column `review_length` when `rating` is missing
   frameborder="0"
 ></iframe>
 
-As we can see, this plot demonstrates that `review_length` influences whether `rating` is missing in a statistically significant way. never use language that implies an absolute conclusion; since we are performing statistical tests and not randomized controlled trials, we cannot prove that either hypothesis is 100% true or false.
+As we can see, this plot demonstrates that `review_length` influences whether `rating` is missing in a statistically significant way.
 
 For our purposes, since we are trying to predict `rating`, it would make sense not to impute missing values and train on them. Therefore, we will drop all rows that have missing ratings. After we inspect the dataframe, we no longer have any missing values.
 
