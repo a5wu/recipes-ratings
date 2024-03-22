@@ -1,9 +1,3 @@
----
-
-# layout: home
-# theme: jekyll-theme-cayman
----
-
 # Predicting Recipe Ratings With Content and Language Models
 
 🤯
